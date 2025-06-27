@@ -90,50 +90,34 @@ def conditional_download_hashes(hashes : DownloadSet) -> bool:
 	return not invalid_hash_paths
 
 
-def conditional_download_sources(sources: DownloadSet) -> bool:
-    source_paths = [sources.get(source_key).get('path') for source_key in sources.keys()]
+def conditional_download_sources(sources : DownloadSet) -> bool:
+	source_paths = [ sources.get(source_key).get('path') for source_key in sources.keys() ]
 
-    process_manager.check()
-    _, invalid_source_paths = validate_source_paths(source_paths)
+	process_manager.check()
+	_, invalid_source_paths = validate_source_paths(source_paths)
+	if invalid_source_paths:
+		for index in sources:
+			if sources.get(index).get('path') in invalid_source_paths:
+				invalid_source_url = sources.get(index).get('url')
+				if invalid_source_url:
+					download_directory_path = os.path.dirname(sources.get(index).get('path'))
+					conditional_download(download_directory_path, [ invalid_source_url ])
 
-    if invalid_source_paths:
-        for index in sources:
-            if sources.get(index).get('path') in invalid_source_paths:
-                invalid_source_url = sources.get(index).get('url')
-                if invalid_source_url:
-                    download_directory_path = os.path.dirname(sources.get(index).get('path'))
-                    conditional_download(download_directory_path, [invalid_source_url])
+	valid_source_paths, invalid_source_paths = validate_source_paths(source_paths)
 
-    valid_source_paths, invalid_source_paths = validate_source_paths(source_paths)
+	for valid_source_path in valid_source_paths:
+		valid_source_file_name, _ = os.path.splitext(os.path.basename(valid_source_path))
+		logger.debug(wording.get('validating_source_succeed').format(source_file_name = valid_source_file_name), __name__)
+	for invalid_source_path in invalid_source_paths:
+		invalid_source_file_name, _ = os.path.splitext(os.path.basename(invalid_source_path))
+		logger.error(wording.get('validating_source_failed').format(source_file_name = invalid_source_file_name), __name__)
 
-    # List to hold updated invalid paths after patch
-    filtered_invalid_source_paths = []
+		if remove_file(invalid_source_path):
+			logger.error(wording.get('deleting_corrupt_source').format(source_file_name = invalid_source_file_name), __name__)
 
-    for valid_source_path in valid_source_paths:
-        valid_source_file_name, _ = os.path.splitext(os.path.basename(valid_source_path))
-        logger.debug(wording.get('validating_source_succeed').format(
-            source_file_name=valid_source_file_name), __name__)
-
-    for invalid_source_path in invalid_source_paths:
-        invalid_source_file_name, _ = os.path.splitext(os.path.basename(invalid_source_path))
-
-        if invalid_source_file_name == "open_nsfw":
-            logger.info(f"[PATCHED] Validation failed for {invalid_source_file_name}, but skipping deletion.", __name__)
-            # ❗ Patch: Treat this file as valid by skipping further processing
-            continue
-        else:
-            filtered_invalid_source_paths.append(invalid_source_path)
-            logger.error(wording.get('validating_source_failed').format(
-                source_file_name=invalid_source_file_name), __name__)
-            if remove_file(invalid_source_path):
-                logger.error(wording.get('deleting_corrupt_source').format(
-                    source_file_name=invalid_source_file_name), __name__)
-
-    if not filtered_invalid_source_paths:
-        process_manager.end()
-
-    return not filtered_invalid_source_paths
-
+	if not invalid_source_paths:
+		process_manager.end()
+	return not invalid_source_paths
 
 
 def validate_hash_paths(hash_paths : List[str]) -> Tuple[List[str], List[str]]:
