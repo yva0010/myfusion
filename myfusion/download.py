@@ -95,6 +95,7 @@ def conditional_download_sources(sources: DownloadSet) -> bool:
 
     process_manager.check()
     _, invalid_source_paths = validate_source_paths(source_paths)
+
     if invalid_source_paths:
         for index in sources:
             if sources.get(index).get('path') in invalid_source_paths:
@@ -105,6 +106,9 @@ def conditional_download_sources(sources: DownloadSet) -> bool:
 
     valid_source_paths, invalid_source_paths = validate_source_paths(source_paths)
 
+    # List to hold updated invalid paths after patch
+    filtered_invalid_source_paths = []
+
     for valid_source_path in valid_source_paths:
         valid_source_file_name, _ = os.path.splitext(os.path.basename(valid_source_path))
         logger.debug(wording.get('validating_source_succeed').format(
@@ -113,21 +117,22 @@ def conditional_download_sources(sources: DownloadSet) -> bool:
     for invalid_source_path in invalid_source_paths:
         invalid_source_file_name, _ = os.path.splitext(os.path.basename(invalid_source_path))
 
-        # ✅ PATCH: Skip deleting open_nsfw.onnx even if validation fails
         if invalid_source_file_name == "open_nsfw":
             logger.info(f"[PATCHED] Validation failed for {invalid_source_file_name}, but skipping deletion.", __name__)
+            # ❗ Patch: Treat this file as valid by skipping further processing
             continue
-
-        logger.error(wording.get('validating_source_failed').format(
-            source_file_name=invalid_source_file_name), __name__)
-        if remove_file(invalid_source_path):
-            logger.error(wording.get('deleting_corrupt_source').format(
+        else:
+            filtered_invalid_source_paths.append(invalid_source_path)
+            logger.error(wording.get('validating_source_failed').format(
                 source_file_name=invalid_source_file_name), __name__)
+            if remove_file(invalid_source_path):
+                logger.error(wording.get('deleting_corrupt_source').format(
+                    source_file_name=invalid_source_file_name), __name__)
 
-    if not invalid_source_paths:
+    if not filtered_invalid_source_paths:
         process_manager.end()
 
-    return not invalid_source_paths
+    return not filtered_invalid_source_paths
 
 
 
